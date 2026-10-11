@@ -89,11 +89,13 @@ export default function App() {
     const selected = Array.from(files)
     if (!selected.length || busy) return
     void perform('Processing supplier quotations', async () => {
-      let current = workspace
-      if (!current || current.is_sample) {
+      let uploadWorkspaceId: string
+      if (workspace && !workspace.is_sample) {
+        uploadWorkspaceId = workspace.id
+      } else {
         const fresh = await api<Comparison>('/workspaces/draft', { method: 'POST' })
         accept(fresh, true)
-        current = fresh.workspace
+        uploadWorkspaceId = fresh.workspace.id
       }
       const batch: QueuedUpload[] = selected.map(file => ({ id: crypto.randomUUID(), uploadId: retry?.uploadId, name: file.name, format: file.name.split('.').pop()?.toUpperCase() ?? 'UNKNOWN', status: 'queued', file }))
       setQueue(previous => [...previous.filter(item => !retry || item.id !== retry.id), ...batch])
@@ -104,9 +106,8 @@ export default function App() {
         form.append('files', item.file!)
         if (item.uploadId) form.append('retry_upload_id', item.uploadId)
         try {
-          const result = await api<UploadResponse>(`/workspaces/${current.id}/quotes`, { method: 'POST', body: form })
+          const result: UploadResponse = await api<UploadResponse>(`/workspaces/${uploadWorkspaceId}/quotes`, { method: 'POST', body: form })
           accept(result.comparison)
-          current = result.comparison.workspace
           added += result.added
           const record = result.files[0]
           if (!record) throw new Error('The backend did not return a file processing result.')
